@@ -3,7 +3,7 @@
 
 SQLite database engine driver.
 
-Version: 0.0.2
+Version: 0.0.3
 
 The goal of the Dash effort is ultimately to replace JavaScript as the lingua franca of web development on the open web platform.
 
