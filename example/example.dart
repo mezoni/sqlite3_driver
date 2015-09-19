@@ -4,20 +4,35 @@ import 'package:sqlite3_driver/sqlite3_driver.dart';
 
 Future main() async {
   var sw = new Stopwatch();
-  _start(sw, "Open connection");
+  // ****************
+  // Create connection
+  // ****************
+  _start(sw, "Create connection");
   var connection = new Sqlite3Connection(":memory:");
-  _stop(sw, "Open connection");
+  _stop(sw, "Create connection");
+
+  // ****************
+  // Open connection
+  // ****************
+  _start(sw, "Open connection");
   await connection.open();
+  _stop(sw, "Open connection");
+
   try {
+    // ****************
+    // Create table
+    // ****************
     _start(sw, "Create table");
-    var stmt0 = new Sqlite3Statement(connection, sqlCreateTable);
-    await stmt0.execute();
+    var stmtCreate = new Sqlite3Statement(connection, sqlCreateTable);
+    await stmtCreate.execute();
     _stop(sw, "Create table");
 
-
+    // ****************
+    // Insert data
+    // ****************
     var count = 10000;
     _start(sw, "Insert $count rows");
-    var stmt1 = new Sqlite3Statement(connection, sqlInsertData);
+    var stmtInsert = new Sqlite3Statement(connection, sqlInsertData);
     for (var i = 0; i < count; i++) {
       var parameters = {};
       parameters[":ID"] = i;
@@ -26,16 +41,31 @@ Future main() async {
       parameters[":ADDRESS"] = "Address";
       parameters[":SALARY"] = 10000.0;
       parameters[":DATA"] = [0, i];
-      await stmt1.execute(parameters);
+      await stmtInsert.execute(parameters);
     }
 
     _stop(sw, "Insert $count rows");
 
+    // ****************
+    // Read data
+    // ****************
     _start(sw, "Read $count rows");
-    var stmt2 = new Sqlite3Statement(connection, sqlReadData);
-    await stmt2.executeQuery({":AGE": 25});
+    var stmtSelect = new Sqlite3Statement(connection, sqlReadData);
+    var stream = await stmtSelect.executeQuery({":AGE": 25});
+    await for (var row in stream) {
+      var id = row["ID"];
+    }
+
     _stop(sw, "Read $count rows");
 
+    // ****************
+    // Delete data
+    // ****************
+    _start(sw, "Delete $count rows");
+    var stmtDelete = new Sqlite3Statement(connection, sqlDeleteData);
+    await stmtDelete.execute({":AGE": 25});
+    var affectedRows = await connection.affectedRows;
+    _stop(sw, "Delete $affectedRows rows");
   } finally {
     connection.close();
   }
@@ -49,7 +79,7 @@ void _start(Stopwatch sw, String message) {
 
 void _stop(Stopwatch sw, String message) {
   sw.stop();
-  print("$message: ${sw.elapsedMilliseconds / 1000} sec" );
+  print("$message: ${sw.elapsedMilliseconds / 1000} sec");
 }
 
 String sqlCreateTable = """
@@ -60,6 +90,12 @@ AGE INT NOT NULL,
 ADDRESS CHAR(50),
 SALARY REAL,
 DATA BLOB);
+""";
+
+String sqlDeleteData = """
+DELETE
+FROM COMPANY
+WHERE AGE = :AGE;
 """;
 
 String sqlInsertData = """
