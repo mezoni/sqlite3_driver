@@ -1,5 +1,5 @@
 name: sqlite3_driver
-version: 0.0.1
+version: 0.0.2
 author: Andrew Mezoni <andrew.mezoni@gmail.com>
 description: SQLite database engine driver.
 homepage: https://github.com/mezoni/sqlite3_driver
