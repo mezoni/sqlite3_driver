@@ -87,6 +87,14 @@ class Sqlite3Statement implements SqlStatement {
       throw new ArgumentError.notNull("commandText");
     }
 
+    if (commandText.trim().isEmpty) {
+      throw new ArgumentError("Command text is empty");
+    }
+
+    if (!connection.isOpen) {
+      throw new SqlException("Connection is not open");
+    }
+
     _helper = new _SqliteHelper();
     var ppStmt = _helper.types["sqlite3_stmt*"].alloc(null);
     var pVoid = _helper.types["void*"].nullPtr;

@@ -1,96 +1,74 @@
-import 'dart:io';
-import 'package:binary_interop/binary_interop.dart';
-import 'package:binary_interop/binary_callback/binary_callback.dart';
-import 'package:libc/headers.dart';
-import 'package:sqlite3_driver/headers.dart';
-import 'package:sqlite3_driver/sqlite3_bindings.dart';
+import 'dart:async';
 
-void main() {
-  var t = new BinaryTypes();
-  var h = new BinaryTypeHelper(t);
-  h.addHeaders(SQLITE3_HEADERS);
-  h.addHeaders(LIBC_HEADERS);
-  var sqlite3 = loadSqlite3Bindings(t);
-  var version = sqlite3.sqlite3_libversion();
-  print(h.readString(version));
+import 'package:sqlite3_driver/sqlite3_driver.dart';
 
-  var filename = "test.db";
+Future main() async {
+  var sw = new Stopwatch();
+  _start(sw, "Open connection");
+  var connection = new Sqlite3Connection(":memory:");
+  _stop(sw, "Open connection");
+  await connection.open();
+  try {
+    _start(sw, "Create table");
+    var stmt0 = new Sqlite3Statement(connection, sqlCreateTable);
+    await stmt0.execute();
+    _stop(sw, "Create table");
 
-  var ppDb = t["sqlite3*"].alloc(null);
-  var err = sqlite3.sqlite3_open(filename, ppDb);
-  if (err != 0) {
-    print("Can't open database: ${sqlite3.sqlite3_errmsg(ppDb.value)}");
-    exit(-1);
-  } else {
-    print("Opened database successfully");
-  }
 
-  var sql = """
-CREATE TABLE COMPANY(
-ID INT PRIMARY KEY NOT NULL,
-NAME TEXT    NOT NULL,
-AGE INT NOT NULL,
-ADDRESS CHAR(50),
-SALARY REAL);
-""";
-
-  var cb = new BinaryCallback.binary(t["sqlite3_callback"].type, (List<BinaryData> args, BinaryData returns) {
-    var argc = args[1].value;
-    var argv = args[2];
-    var azColName = args[3];
-    for (var i = 0; i < argc; i++) {
-      var name = h.readString(azColName[i].value);
-      var value = h.readString(argv[i].value);
-      print("$name = $value");
+    var count = 10000;
+    _start(sw, "Insert $count rows");
+    var stmt1 = new Sqlite3Statement(connection, sqlInsertData);
+    for (var i = 0; i < count; i++) {
+      var parameters = {};
+      parameters[":ID"] = i;
+      parameters[":NAME"] = "Name";
+      parameters[":AGE"] = 25;
+      parameters[":ADDRESS"] = "Address";
+      parameters[":SALARY"] = 10000.0;
+      parameters[":DATA"] = [0, i];
+      await stmt1.execute(parameters);
     }
 
-    returns.value = 0;
-  });
+    _stop(sw, "Insert $count rows");
 
-  var zErrMsg = t["char*"].alloc();
+    _start(sw, "Read $count rows");
+    var stmt2 = new Sqlite3Statement(connection, sqlReadData);
+    await stmt2.executeQuery({":AGE": 25});
+    _stop(sw, "Read $count rows");
 
-  err = sqlite3.sqlite3_exec(
-      ppDb.value, sql, cb.functionCode, t["void*"].nullPtr, zErrMsg);
-
-  if (err != Sqlite3Bindings.SQLITE_OK) {
-    print("SQL error: ${h.readString(zErrMsg.value)}");
-    sqlite3.sqlite3_free(zErrMsg);
-  } else {
-    print("Table created successfully");
+  } finally {
+    connection.close();
   }
+}
 
-  sql = """
-INSERT INTO COMPANY (ID,NAME,AGE,ADDRESS,SALARY)
-VALUES (1, 'Paul', 32, 'California', 20000.00 );
-INSERT INTO COMPANY (ID,NAME,AGE,ADDRESS,SALARY)
-VALUES (2, 'Allen', 25, 'Texas', 15000.00 );
-INSERT INTO COMPANY (ID,NAME,AGE,ADDRESS,SALARY)
-VALUES (3, 'Teddy', 23, 'Norway', 20000.00 );
-INSERT INTO COMPANY (ID,NAME,AGE,ADDRESS,SALARY)
-VALUES (4, 'Mark', 25, 'Rich-Mond ', 65000.00 );
+void _start(Stopwatch sw, String message) {
+  print("$message...");
+  sw.reset();
+  sw.start();
+}
+
+void _stop(Stopwatch sw, String message) {
+  sw.stop();
+  print("$message: ${sw.elapsedMilliseconds / 1000} sec" );
+}
+
+String sqlCreateTable = """
+CREATE TABLE COMPANY (
+ID INT PRIMARY KEY NOT NULL,
+NAME TEXT NOT NULL,
+AGE INT NOT NULL,
+ADDRESS CHAR(50),
+SALARY REAL,
+DATA BLOB);
 """;
 
-  err = sqlite3.sqlite3_exec(
-      ppDb.value, sql, cb.functionCode, t["void*"].nullPtr, zErrMsg);
+String sqlInsertData = """
+INSERT INTO COMPANY (ID, NAME, AGE, ADDRESS, SALARY, DATA)
+VALUES (:ID, :NAME, :AGE, :ADDRESS, :SALARY, :DATA);
+""";
 
-  if (err != Sqlite3Bindings.SQLITE_OK) {
-    print("SQL error: ${h.readString(zErrMsg.value)}");
-    sqlite3.sqlite3_free(zErrMsg);
-  } else {
-    print("Records created successfully");
-  }
-
-  sql = "SELECT * from COMPANY";
-
-  err = sqlite3.sqlite3_exec(
-      ppDb.value, sql, cb.functionCode, t["void*"].nullPtr, zErrMsg);
-
-  if (err != Sqlite3Bindings.SQLITE_OK) {
-    print("SQL error: ${h.readString(zErrMsg.value)}");
-    sqlite3.sqlite3_free(zErrMsg);
-  } else {
-    print("Operation done successfully");
-  }
-
-  sqlite3.sqlite3_close(ppDb.value);
-}
+String sqlReadData = """
+SELECT *
+FROM COMPANY
+WHERE AGE = :AGE;
+""";
