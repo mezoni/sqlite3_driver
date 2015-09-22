@@ -23,7 +23,7 @@ class Sqlite3Connection implements SqlConnection {
       return 0;
     }
 
-    return _helper.bindings.sqlite3_changes(_pDb);
+    return _helper.library.sqlite3_changes(_pDb);
   }
 
   bool get isOpen {
@@ -35,7 +35,7 @@ class Sqlite3Connection implements SqlConnection {
       return 0;
     }
 
-    return _helper.bindings.sqlite3_last_insert_rowid(_pDb);
+    return _helper.library.sqlite3_last_insert_rowid(_pDb);
   }
 
   Future close() async {
@@ -47,7 +47,7 @@ class Sqlite3Connection implements SqlConnection {
       await statement.free();
     }
 
-    var errorCode = _helper.bindings.sqlite3_close(_pDb);
+    var errorCode = _helper.library.sqlite3_close(_pDb);
     _helper.checkError(errorCode, this);
     _pDb = null;
   }
@@ -59,7 +59,7 @@ class Sqlite3Connection implements SqlConnection {
 
     var ppDb = _helper.types["sqlite3*"].alloc(null);
     var pFilename = _helper.allocString16(_filename);
-    var errorCode = _helper.bindings.sqlite3_open16(pFilename, ppDb);
+    var errorCode = _helper.library.sqlite3_open16(pFilename, ppDb);
     _pDb = ppDb.value;
     if (_pDb.isNullPtr) {
       throw new SqlException("Not enough memory");
@@ -99,7 +99,7 @@ class Sqlite3Statement implements SqlStatement {
     var ppStmt = _helper.types["sqlite3_stmt*"].alloc(null);
     var pVoid = _helper.types["void*"].nullPtr;
     var pCommandText = _helper.allocString16(commandText);
-    var errorCode = _helper.bindings
+    var errorCode = _helper.library
         .sqlite3_prepare16_v2(connection._pDb, pCommandText, -1, ppStmt, pVoid);
     _helper.checkError(errorCode, connection);
     _pStmt = ppStmt.value;
@@ -109,7 +109,7 @@ class Sqlite3Statement implements SqlStatement {
   Future execute([dynamic parameters]) async {
     _checkConnection();
     _bindParameters(parameters);
-    var errorCode = _helper._bindings.sqlite3_step(_pStmt);
+    var errorCode = _helper.library.sqlite3_step(_pStmt);
     _checkResult(errorCode);
     _reset();
     return null;
@@ -119,42 +119,42 @@ class Sqlite3Statement implements SqlStatement {
     _checkConnection();
     _bindParameters(parameters);
     var controller = new StreamController<SqlDataRow>();
-    var columnCount = _helper._bindings.sqlite3_column_count(_pStmt);
+    var columnCount = _helper.library.sqlite3_column_count(_pStmt);
     var columns = new List<String>(columnCount);
     int errorCode;
     var int16_t = _helper.types["int16_t"];
     for (var i = 0; i < columnCount; i++) {
       var name =
-          _helper.readString(_helper._bindings.sqlite3_column_name(_pStmt, i));
+          _helper.readString(_helper.library.sqlite3_column_name(_pStmt, i));
       columns[i] = name;
     }
 
-    while ((errorCode = _helper._bindings.sqlite3_step(_pStmt)) ==
-        Sqlite3Bindings.SQLITE_ROW) {
+    while ((errorCode = _helper.library.sqlite3_step(_pStmt)) ==
+        Sqlite3Def.SQLITE_ROW) {
       var data = <String, dynamic>{};
       for (var i = 0; i < columnCount; i++) {
-        var columnType = _helper._bindings.sqlite3_column_type(_pStmt, i);
+        var columnType = _helper.library.sqlite3_column_type(_pStmt, i);
         var value;
         switch (columnType) {
-          case Sqlite3Bindings.SQLITE_BLOB:
+          case Sqlite3Def.SQLITE_BLOB:
             var numberOfBytes =
-                _helper._bindings.sqlite3_column_bytes(_pStmt, i);
-            var pBuffer = _helper._bindings.sqlite3_column_blob(_pStmt, i);
+                _helper.library.sqlite3_column_bytes(_pStmt, i);
+            var pBuffer = _helper.library.sqlite3_column_blob(_pStmt, i);
             var aChar = _helper.types["char[$numberOfBytes]"]
                 .extern(pBuffer.base, pBuffer.offset);
             value = aChar.value;
             break;
-          case Sqlite3Bindings.SQLITE_FLOAT:
-            value = _helper._bindings.sqlite3_column_double(_pStmt, i);
+          case Sqlite3Def.SQLITE_FLOAT:
+            value = _helper.library.sqlite3_column_double(_pStmt, i);
             break;
-          case Sqlite3Bindings.SQLITE_INTEGER:
-            value = _helper._bindings.sqlite3_column_int64(_pStmt, i);
+          case Sqlite3Def.SQLITE_INTEGER:
+            value = _helper.library.sqlite3_column_int64(_pStmt, i);
             break;
-          case Sqlite3Bindings.SQLITE3_TEXT:
-            var pData = _helper._bindings.sqlite3_column_text16(_pStmt, i);
+          case Sqlite3Def.SQLITE3_TEXT:
+            var pData = _helper.library.sqlite3_column_text16(_pStmt, i);
             value = _helper.readString16(pData);
             break;
-          case Sqlite3Bindings.SQLITE_NULL:
+          case Sqlite3Def.SQLITE_NULL:
             value = null;
             break;
           default:
@@ -179,7 +179,7 @@ class Sqlite3Statement implements SqlStatement {
       return;
     }
 
-    _helper.bindings.sqlite3_finalize(_pStmt);
+    _helper.library.sqlite3_finalize(_pStmt);
     connection._statements.remove(this);
   }
 
@@ -193,27 +193,27 @@ class Sqlite3Statement implements SqlStatement {
     index++;
     int errorCode;
     if (parameter == null) {
-      errorCode = _helper.bindings.sqlite3_bind_null(_pStmt, index);
+      errorCode = _helper.library.sqlite3_bind_null(_pStmt, index);
     } else if (parameter is int) {
-      errorCode = _helper.bindings.sqlite3_bind_int64(_pStmt, index, parameter);
+      errorCode = _helper.library.sqlite3_bind_int64(_pStmt, index, parameter);
     } else if (parameter is double) {
       errorCode =
-          _helper.bindings.sqlite3_bind_double(_pStmt, index, parameter);
+          _helper.library.sqlite3_bind_double(_pStmt, index, parameter);
     } else if (parameter is String) {
       var pData = _helper.allocString16(parameter);
       // TODO: Optimize
-      var f = _helper.types["void*"].extern(Sqlite3Bindings.SQLITE_TRANSIENT);
+      var f = _helper.types["void*"].extern(Sqlite3Def.SQLITE_TRANSIENT);
       errorCode =
-          _helper.bindings.sqlite3_bind_text16(_pStmt, index, pData, -1, f);
+          _helper.library.sqlite3_bind_text16(_pStmt, index, pData, -1, f);
     } else if (parameter is List) {
       var length = parameter.length;
       if (length == 0) {
-        errorCode = _helper.bindings.sqlite3_bind_zeroblob(_pStmt, index, -1);
+        errorCode = _helper.library.sqlite3_bind_zeroblob(_pStmt, index, -1);
       } else {
         var pData = _helper.types["uint8_t[$length]"].alloc(parameter);
         // TODO: Optimize
-        var f = _helper.types["void*"].extern(Sqlite3Bindings.SQLITE_TRANSIENT);
-        errorCode =_helper.bindings.sqlite3_bind_blob(_pStmt, index, pData, length, f);
+        var f = _helper.types["void*"].extern(Sqlite3Def.SQLITE_TRANSIENT);
+        errorCode =_helper.library.sqlite3_bind_blob(_pStmt, index, pData, length, f);
       }
 
     } else {
@@ -253,7 +253,7 @@ class Sqlite3Statement implements SqlStatement {
   void _bindParameterFromMap(Map parameters) {
     for (var name in parameters.keys) {
       // TODO: Convert parameter in UTF-8
-      var index = _helper.bindings.sqlite3_bind_parameter_index(_pStmt, name);
+      var index = _helper.library.sqlite3_bind_parameter_index(_pStmt, name);
       if (index == 0) {
         throw new ArgumentError("Parameter '$name' not found");
       }
@@ -273,13 +273,13 @@ class Sqlite3Statement implements SqlStatement {
   }
 
   void _checkResult(int errorCode) {
-    if (errorCode != Sqlite3Bindings.SQLITE_DONE) {
+    if (errorCode != Sqlite3Def.SQLITE_DONE) {
       _helper.checkError(errorCode, connection);
     }
   }
 
   void _reset() {
-    _helper._bindings.sqlite3_reset(_pStmt);
+    _helper.library.sqlite3_reset(_pStmt);
   }
 }
 
@@ -329,7 +329,7 @@ class _SqliteDataRow implements SqlDataRow {
 class _SqliteHelper {
   static _SqliteHelper _instance;
 
-  Sqlite3Bindings _bindings;
+  Sqlite3Lib _library;
 
   BinaryTypeHelper _helper;
 
@@ -348,11 +348,11 @@ class _SqliteHelper {
     _helper = new BinaryTypeHelper(types);
     _helper.addHeaders(SQLITE3_HEADERS);
     _helper.addHeaders(LIBC_HEADERS);
-    _bindings = loadSqlite3Bindings(types);
+    _library = loadSqlite3Library(types);
   }
 
-  Sqlite3Bindings get bindings {
-    return _bindings;
+  Sqlite3Lib get library {
+    return _library;
   }
 
   BinaryTypeHelper get helper {
@@ -371,9 +371,9 @@ class _SqliteHelper {
 
   void checkError(int errorCode, Sqlite3Connection connection) {
     String message;
-    if (errorCode != Sqlite3Bindings.SQLITE_OK) {
+    if (errorCode != Sqlite3Def.SQLITE_OK) {
       if (connection._pDb != null) {
-        message = readString(_bindings.sqlite3_errmsg(connection._pDb));
+        message = readString(_library.sqlite3_errmsg(connection._pDb));
       }
 
       throw new SqlException(message);
