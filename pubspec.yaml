@@ -6,7 +6,7 @@ homepage: https://github.com/mezoni/sqlite3_driver
 dependencies:
   binary_interop: any
   libc: any
-  sqlite3_bindings: '^0.0.8'
+  sqlite3_bindings: '>=0.0.8'
 dev_dependencies:
   build_tools: any
   file_utils: any
